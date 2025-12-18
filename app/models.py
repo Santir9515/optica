@@ -7,6 +7,7 @@ from sqlalchemy import (
     Boolean,
     Date,
     ForeignKey,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy import DateTime
@@ -14,7 +15,8 @@ from app.database import Base
 
 class Cliente(Base):
     __tablename__ = "cliente"
-
+    __table_args__ = (UniqueConstraint("optica_id", "nombre", name="uq_proveedor_optica_nombre"),)
+    optica_id = Column(String(36), nullable=False, index=True)
     id_cliente = Column(Integer, primary_key=True, index=True)
     nombre = Column(Text, nullable=False)
     apellido = Column(Text, nullable=False)
@@ -33,7 +35,7 @@ class Cliente(Base):
 
 class Receta(Base):
     __tablename__ = "receta"
-
+    optica_id = Column(String(36), nullable=False, index=True)
     id_receta = Column(Integer, primary_key=True, index=True)
     id_cliente = Column(Integer, ForeignKey("cliente.id_cliente"), nullable=False)
     fecha_receta = Column(Date, nullable=False)
@@ -66,9 +68,10 @@ class Receta(Base):
 
 class Proveedor(Base):
     __tablename__ = "proveedor"
-
+    __table_args__ = (UniqueConstraint("optica_id", "nombre", name="uq_proveedor_optica_nombre"),)
+    optica_id = Column(String(36), nullable=False, index=True)
     id_proveedor = Column(Integer, primary_key=True, index=True)
-    nombre = Column(String(191), nullable=False, unique=True)
+    nombre = Column(String(191), nullable=False)
     telefono = Column(String(20), nullable=True)
     email = Column(Text, nullable=True)
     direccion = Column(Text, nullable=True)
@@ -85,7 +88,10 @@ class Proveedor(Base):
 
 class Insumo(Base):
     __tablename__ = "insumo"
-
+    __table_args__ = (
+    UniqueConstraint("optica_id", "codigo_interno", name="uq_insumo_optica_codigo_interno"),
+)
+    optica_id = Column(String(36), nullable=False, index=True)
     id_insumo = Column(Integer, primary_key=True, index=True)
     descripcion = Column(Text, nullable=False)
     tipo_insumo = Column(Text, nullable=True)
@@ -123,6 +129,7 @@ class Insumo(Base):
 class CompraInsumos(Base):
     __tablename__ = "compra_insumos"
 
+    optica_id = Column(String(36), nullable=False, index=True)
     id_compra = Column(Integer, primary_key=True, index=True)
     id_proveedor = Column(Integer, ForeignKey("proveedor.id_proveedor"), nullable=False)
     fecha_compra = Column(Date, nullable=False)
@@ -144,9 +151,14 @@ class CompraInsumos(Base):
 
 
 
+
 class DetalleCompraInsumos(Base):
     __tablename__ = "detalle_compra_insumos"
+    __table_args__ = (
+        UniqueConstraint("optica_id", "id_compra", "id_insumo", name="uq_detalle_compra_optica_compra_insumo"),
+    )
 
+    optica_id = Column(String(36), nullable=False, index=True)
     id_detalle_compra = Column(Integer, primary_key=True, index=True)
     id_compra = Column(Integer, ForeignKey("compra_insumos.id_compra"), nullable=False)
     id_insumo = Column(Integer, ForeignKey("insumo.id_insumo"), nullable=False)
@@ -159,8 +171,14 @@ class DetalleCompraInsumos(Base):
     insumo = relationship("Insumo", back_populates="detalles_compra")
 
 
+
 class PedidoLaboratorio(Base):
     __tablename__ = "pedido_laboratorio"
+    __table_args__ = (
+        UniqueConstraint("optica_id", "nro_orden_lab", name="uq_pedido_lab_optica_nro_orden"),
+    )
+
+    optica_id = Column(String(36), nullable=False, index=True)
 
     id_pedido_lab = Column(Integer, primary_key=True, index=True)
     id_receta = Column(Integer, ForeignKey("receta.id_receta"), nullable=False)
@@ -184,13 +202,16 @@ class PedidoLaboratorio(Base):
     )
 
 
+
 class DetallePedidoLaboratorioInsumo(Base):
     __tablename__ = "detalle_pedido_laboratorio_insumo"
-
-    id_detalle_pedido_lab_insumo = Column(Integer, primary_key=True, index=True)
-    id_pedido_lab = Column(
-        Integer, ForeignKey("pedido_laboratorio.id_pedido_lab"), nullable=False
+    __table_args__ = (
+        UniqueConstraint("optica_id", "id_pedido_lab", "id_insumo", name="uq_det_pedido_optica_pedido_insumo"),
     )
+
+    optica_id = Column(String(36), nullable=False, index=True)
+    id_detalle_pedido_lab_insumo = Column(Integer, primary_key=True, index=True)
+    id_pedido_lab = Column(Integer, ForeignKey("pedido_laboratorio.id_pedido_lab"), nullable=False)
     id_insumo = Column(Integer, ForeignKey("insumo.id_insumo"), nullable=False)
 
     cantidad = Column(Integer, nullable=False)

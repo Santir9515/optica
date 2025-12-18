@@ -14,6 +14,7 @@ from app.models import (
     Proveedor,
     Insumo,
 )
+from app.dependencies.optica import get_optica_id
 
 router = APIRouter(prefix="/pedidos-laboratorio", tags=["Pedidos al laboratorio"])
 
@@ -75,21 +76,68 @@ def _validar_estado(estado: str) -> str:
     return est
 
 
-# ----------------- Endpoints -----------------
-
-@router.post("/", status_code=201)
-def crear_pedido(pedido_in: PedidoLaboratorioCreate, db: Session = Depends(get_db)):
-    receta = db.query(Receta).filter(Receta.id_receta == pedido_in.id_receta).first()
+def _get_receta_optica(db: Session, optica_id: str, id_receta: int) -> Receta:
+    receta = (
+        db.query(Receta)
+        .filter(Receta.id_receta == id_receta, Receta.optica_id == optica_id)
+        .first()
+    )
     if not receta:
-        raise HTTPException(status_code=400, detail="La receta no existe")
+        raise HTTPException(status_code=400, detail="La receta no existe en esta óptica")
+    return receta
 
+
+def _get_proveedor_optica(db: Session, optica_id: str, id_proveedor: int) -> Proveedor:
     proveedor = (
         db.query(Proveedor)
-        .filter(Proveedor.id_proveedor == pedido_in.id_proveedor, Proveedor.activo == True)
+        .filter(
+            Proveedor.id_proveedor == id_proveedor,
+            Proveedor.optica_id == optica_id,
+            Proveedor.activo == True,
+        )
         .first()
     )
     if not proveedor:
-        raise HTTPException(status_code=400, detail="Proveedor no encontrado o inactivo")
+        raise HTTPException(status_code=400, detail="Proveedor no encontrado, inactivo o fuera de esta óptica")
+    return proveedor
+
+
+def _get_insumo_optica(db: Session, optica_id: str, id_insumo: int) -> Insumo:
+    insumo = (
+        db.query(Insumo)
+        .filter(
+            Insumo.id_insumo == id_insumo,
+            Insumo.optica_id == optica_id,
+            Insumo.activo == True,
+        )
+        .first()
+    )
+    if not insumo:
+        raise HTTPException(status_code=400, detail=f"Insumo con id {id_insumo} no existe, inactivo o fuera de esta óptica")
+    return insumo
+
+
+def _get_pedido_optica(db: Session, optica_id: str, id_pedido_lab: int) -> PedidoLaboratorio:
+    pedido = (
+        db.query(PedidoLaboratorio)
+        .filter(PedidoLaboratorio.id_pedido_lab == id_pedido_lab, PedidoLaboratorio.optica_id == optica_id)
+        .first()
+    )
+    if not pedido:
+        raise HTTPException(status_code=404, detail="Pedido no encontrado en esta óptica")
+    return pedido
+
+
+# ----------------- Endpoints -----------------
+
+@router.post("/", status_code=201)
+def crear_pedido(
+    pedido_in: PedidoLaboratorioCreate,
+    optica_id: str = Depends(get_optica_id),
+    db: Session = Depends(get_db),
+):
+    _get_receta_optica(db, optica_id, pedido_in.id_receta)
+    _get_proveedor_optica(db, optica_id, pedido_in.id_proveedor)
 
     if not pedido_in.items:
         raise HTTPException(status_code=400, detail="El pedido debe tener al menos un ítem")
@@ -97,16 +145,7 @@ def crear_pedido(pedido_in: PedidoLaboratorioCreate, db: Session = Depends(get_d
     detalles_objs: List[DetallePedidoLaboratorioInsumo] = []
 
     for item in pedido_in.items:
-        insumo = (
-            db.query(Insumo)
-            .filter(Insumo.id_insumo == item.id_insumo, Insumo.activo == True)
-            .first()
-        )
-        if not insumo:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Insumo con id {item.id_insumo} no existe o está inactivo",
-            )
+        _get_insumo_optica(db, optica_id, item.id_insumo)
 
         detalles_objs.append(
             DetallePedidoLaboratorioInsumo(
@@ -118,6 +157,7 @@ def crear_pedido(pedido_in: PedidoLaboratorioCreate, db: Session = Depends(get_d
         )
 
     pedido = PedidoLaboratorio(
+        optica_id=optica_id,
         id_receta=pedido_in.id_receta,
         id_proveedor=pedido_in.id_proveedor,
         fecha_envio=pedido_in.fecha_envio,
@@ -144,6 +184,7 @@ def crear_pedido(pedido_in: PedidoLaboratorioCreate, db: Session = Depends(get_d
 
 @router.get("/avanzado")
 def listar_pedidos_avanzado(
+    optica_id: str = Depends(get_optica_id),
     q: Optional[str] = Query(default=None, description="Busca en estado / nro_orden_lab / observaciones"),
     id_proveedor: Optional[int] = None,
     id_receta: Optional[int] = None,
@@ -178,6 +219,7 @@ def listar_pedidos_avanzado(
 
     query = (
         db.query(PedidoLaboratorio)
+        .filter(PedidoLaboratorio.optica_id == optica_id)
         .options(
             joinedload(PedidoLaboratorio.proveedor),
             joinedload(PedidoLaboratorio.receta),
@@ -188,9 +230,11 @@ def listar_pedidos_avanzado(
     filtros = []
 
     if id_proveedor is not None:
+        _get_proveedor_optica(db, optica_id, id_proveedor)
         filtros.append(PedidoLaboratorio.id_proveedor == id_proveedor)
 
     if id_receta is not None:
+        _get_receta_optica(db, optica_id, id_receta)
         filtros.append(PedidoLaboratorio.id_receta == id_receta)
 
     if estado:
@@ -245,18 +289,19 @@ def listar_pedidos_avanzado(
 
 
 @router.patch("/{id_pedido_lab}")
-def patch_pedido(id_pedido_lab: int, data: PedidoPatch, db: Session = Depends(get_db)):
-    pedido = db.query(PedidoLaboratorio).filter(PedidoLaboratorio.id_pedido_lab == id_pedido_lab).first()
-    if not pedido:
-        raise HTTPException(status_code=404, detail="Pedido no encontrado")
+def patch_pedido(
+    id_pedido_lab: int,
+    data: PedidoPatch,
+    optica_id: str = Depends(get_optica_id),
+    db: Session = Depends(get_db),
+):
+    pedido = _get_pedido_optica(db, optica_id, id_pedido_lab)
 
     patch = data.model_dump(exclude_unset=True)
     if not patch:
         raise HTTPException(status_code=400, detail="No se enviaron campos")
 
-    # Si viene estado, validar
     if "estado" in patch and patch["estado"] is not None:
-        # regla: si ya está recibido, no permitir volver atrás
         if pedido.estado == "RECIBIDO" and _estado_normalizado(patch["estado"]) != "RECIBIDO":
             raise HTTPException(status_code=400, detail="No se puede modificar el estado de un pedido ya recibido")
         patch["estado"] = _validar_estado(patch["estado"])
@@ -270,10 +315,13 @@ def patch_pedido(id_pedido_lab: int, data: PedidoPatch, db: Session = Depends(ge
 
 
 @router.patch("/{id_pedido_lab}/estado")
-def actualizar_estado_pedido(id_pedido_lab: int, data: PedidoEstadoUpdate, db: Session = Depends(get_db)):
-    pedido = db.query(PedidoLaboratorio).filter(PedidoLaboratorio.id_pedido_lab == id_pedido_lab).first()
-    if not pedido:
-        raise HTTPException(status_code=404, detail="Pedido no encontrado")
+def actualizar_estado_pedido(
+    id_pedido_lab: int,
+    data: PedidoEstadoUpdate,
+    optica_id: str = Depends(get_optica_id),
+    db: Session = Depends(get_db),
+):
+    pedido = _get_pedido_optica(db, optica_id, id_pedido_lab)
 
     nuevo_estado = _validar_estado(data.estado)
 
@@ -291,6 +339,7 @@ def actualizar_estado_pedido(id_pedido_lab: int, data: PedidoEstadoUpdate, db: S
 def recepcionar_pedido(
     id_pedido_lab: int,
     data: PedidoRecepcionUpdate,
+    optica_id: str = Depends(get_optica_id),
     db: Session = Depends(get_db),
 ):
     pedido = (
@@ -298,7 +347,7 @@ def recepcionar_pedido(
         .options(
             joinedload(PedidoLaboratorio.detalles_insumo).joinedload(DetallePedidoLaboratorioInsumo.insumo)
         )
-        .filter(PedidoLaboratorio.id_pedido_lab == id_pedido_lab)
+        .filter(PedidoLaboratorio.id_pedido_lab == id_pedido_lab, PedidoLaboratorio.optica_id == optica_id)
         .first()
     )
     if not pedido:
@@ -307,7 +356,6 @@ def recepcionar_pedido(
     if pedido.fecha_recepcion:
         raise HTTPException(status_code=400, detail="Pedido ya recibido")
 
-    # defaults
     pedido.fecha_recepcion = data.fecha_recepcion or date.today()
     pedido.estado = _estado_normalizado(data.estado) or "RECIBIDO"
 
@@ -317,15 +365,15 @@ def recepcionar_pedido(
     if data.observaciones is not None:
         pedido.observaciones = data.observaciones
 
-    # descontar stock al recibir (si corresponde a tu negocio)
     if data.descontar_stock:
         for det in pedido.detalles_insumo:
             insumo = det.insumo
             if not insumo:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Detalle con insumo inexistente (id_insumo={det.id_insumo}).",
-                )
+                raise HTTPException(status_code=400, detail=f"Detalle con insumo inexistente (id_insumo={det.id_insumo}).")
+
+            # seguridad tenant: el insumo debe pertenecer a la óptica
+            if getattr(insumo, "optica_id", None) != optica_id:
+                raise HTTPException(status_code=400, detail=f"Insumo id {insumo.id_insumo} no pertenece a esta óptica")
 
             if insumo.stock_actual is None:
                 insumo.stock_actual = 0
@@ -354,9 +402,13 @@ def recepcionar_pedido(
 
 
 @router.get("/")
-def listar_pedidos(db: Session = Depends(get_db)):
+def listar_pedidos(
+    optica_id: str = Depends(get_optica_id),
+    db: Session = Depends(get_db),
+):
     pedidos = (
         db.query(PedidoLaboratorio)
+        .filter(PedidoLaboratorio.optica_id == optica_id)
         .options(
             joinedload(PedidoLaboratorio.proveedor),
             joinedload(PedidoLaboratorio.receta),
@@ -368,24 +420,30 @@ def listar_pedidos(db: Session = Depends(get_db)):
 
     items = []
     for p in pedidos:
-        items.append({
-            "id_pedido_lab": p.id_pedido_lab,
-            "id_receta": p.id_receta,
-            "id_proveedor": p.id_proveedor,
-            "fecha_envio": p.fecha_envio,
-            "fecha_estimada_rec": p.fecha_estimada_rec,
-            "fecha_recepcion": p.fecha_recepcion,
-            "estado": p.estado,
-            "nro_orden_lab": p.nro_orden_lab,
-            "observaciones": p.observaciones,
-            "proveedor_nombre": p.proveedor.nombre if p.proveedor else None,
-            "cantidad_insumos": len(p.detalles_insumo),
-        })
+        items.append(
+            {
+                "id_pedido_lab": p.id_pedido_lab,
+                "id_receta": p.id_receta,
+                "id_proveedor": p.id_proveedor,
+                "fecha_envio": p.fecha_envio,
+                "fecha_estimada_rec": p.fecha_estimada_rec,
+                "fecha_recepcion": p.fecha_recepcion,
+                "estado": p.estado,
+                "nro_orden_lab": p.nro_orden_lab,
+                "observaciones": p.observaciones,
+                "proveedor_nombre": p.proveedor.nombre if p.proveedor else None,
+                "cantidad_insumos": len(p.detalles_insumo),
+            }
+        )
     return items
 
 
 @router.get("/{id_pedido_lab}")
-def obtener_pedido(id_pedido_lab: int, db: Session = Depends(get_db)):
+def obtener_pedido(
+    id_pedido_lab: int,
+    optica_id: str = Depends(get_optica_id),
+    db: Session = Depends(get_db),
+):
     pedido = (
         db.query(PedidoLaboratorio)
         .options(
@@ -393,7 +451,7 @@ def obtener_pedido(id_pedido_lab: int, db: Session = Depends(get_db)):
             joinedload(PedidoLaboratorio.receta),
             joinedload(PedidoLaboratorio.detalles_insumo).joinedload(DetallePedidoLaboratorioInsumo.insumo),
         )
-        .filter(PedidoLaboratorio.id_pedido_lab == id_pedido_lab)
+        .filter(PedidoLaboratorio.id_pedido_lab == id_pedido_lab, PedidoLaboratorio.optica_id == optica_id)
         .first()
     )
     if not pedido:
@@ -401,14 +459,16 @@ def obtener_pedido(id_pedido_lab: int, db: Session = Depends(get_db)):
 
     detalles = []
     for d in pedido.detalles_insumo:
-        detalles.append({
-            "id_detalle": d.id_detalle_pedido_lab_insumo,
-            "id_insumo": d.id_insumo,
-            "descripcion_insumo": d.insumo.descripcion if d.insumo else None,
-            "cantidad": d.cantidad,
-            "precio_unitario": d.precio_unitario,
-            "observaciones": d.observaciones,
-        })
+        detalles.append(
+            {
+                "id_detalle": d.id_detalle_pedido_lab_insumo,
+                "id_insumo": d.id_insumo,
+                "descripcion_insumo": d.insumo.descripcion if d.insumo else None,
+                "cantidad": d.cantidad,
+                "precio_unitario": d.precio_unitario,
+                "observaciones": d.observaciones,
+            }
+        )
 
     return {
         "id_pedido_lab": pedido.id_pedido_lab,

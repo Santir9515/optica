@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
 from app.models import CompraInsumos, DetalleCompraInsumos, Insumo, Proveedor
+from app.dependencies.optica import get_optica_id
 
 router = APIRouter(prefix="/compras-insumos", tags=["Compras de insumos"])
 
@@ -40,10 +41,54 @@ class CompraInsumosAnular(BaseModel):
     motivo: Optional[str] = None
 
 
+# -------------------- Helpers --------------------
+
+def _get_proveedor_optica(db: Session, optica_id: str, id_proveedor: int) -> Proveedor:
+    proveedor = (
+        db.query(Proveedor)
+        .filter(
+            Proveedor.id_proveedor == id_proveedor,
+            Proveedor.optica_id == optica_id,
+            Proveedor.activo == True,
+        )
+        .first()
+    )
+    if not proveedor:
+        raise HTTPException(status_code=400, detail="Proveedor no encontrado, inactivo o fuera de esta óptica")
+    return proveedor
+
+
+def _get_insumo_optica(db: Session, optica_id: str, id_insumo: int) -> Insumo:
+    insumo = (
+        db.query(Insumo)
+        .filter(
+            Insumo.id_insumo == id_insumo,
+            Insumo.optica_id == optica_id,
+            Insumo.activo == True,
+        )
+        .first()
+    )
+    if not insumo:
+        raise HTTPException(status_code=400, detail=f"Insumo id {id_insumo} no existe, inactivo o fuera de esta óptica")
+    return insumo
+
+
+def _get_compra_optica(db: Session, optica_id: str, id_compra: int) -> CompraInsumos:
+    compra = (
+        db.query(CompraInsumos)
+        .filter(CompraInsumos.id_compra == id_compra, CompraInsumos.optica_id == optica_id)
+        .first()
+    )
+    if not compra:
+        raise HTTPException(status_code=404, detail="Compra no encontrada en esta óptica")
+    return compra
+
+
 # -------------------- Listado avanzado --------------------
 
 @router.get("/avanzado")
 def listar_compras_insumos_avanzado(
+    optica_id: str = Depends(get_optica_id),
     q: Optional[str] = Query(default=None, description="Busca en tipo/nro/observaciones"),
     id_proveedor: Optional[int] = Query(default=None),
     anulada: Optional[bool] = Query(default=None, description="Filtra anuladas (true/false)"),
@@ -55,7 +100,7 @@ def listar_compras_insumos_avanzado(
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
 ):
-    query = db.query(CompraInsumos)
+    query = db.query(CompraInsumos).filter(CompraInsumos.optica_id == optica_id)
 
     if q:
         like = f"%{q.strip()}%"
@@ -68,6 +113,8 @@ def listar_compras_insumos_avanzado(
         )
 
     if id_proveedor is not None:
+        # asegura que el proveedor sea de la óptica (evita filtrar por otro tenant)
+        _get_proveedor_optica(db, optica_id, id_proveedor)
         query = query.filter(CompraInsumos.id_proveedor == id_proveedor)
 
     if anulada is not None:
@@ -118,10 +165,11 @@ def listar_compras_insumos_avanzado(
 
 @router.get("/")
 def listar_compras(
+    optica_id: str = Depends(get_optica_id),
     incluir_anuladas: bool = Query(default=True, description="Si false, oculta anuladas"),
     db: Session = Depends(get_db),
 ):
-    query = db.query(CompraInsumos)
+    query = db.query(CompraInsumos).filter(CompraInsumos.optica_id == optica_id)
     if not incluir_anuladas:
         query = query.filter(CompraInsumos.anulada == False)
 
@@ -129,11 +177,15 @@ def listar_compras(
 
 
 @router.get("/{id_compra}")
-def obtener_compra(id_compra: int, db: Session = Depends(get_db)):
+def obtener_compra(
+    id_compra: int,
+    optica_id: str = Depends(get_optica_id),
+    db: Session = Depends(get_db),
+):
     compra = (
         db.query(CompraInsumos)
         .options(joinedload(CompraInsumos.detalles).joinedload(DetalleCompraInsumos.insumo))
-        .filter(CompraInsumos.id_compra == id_compra)
+        .filter(CompraInsumos.id_compra == id_compra, CompraInsumos.optica_id == optica_id)
         .first()
     )
     if not compra:
@@ -170,14 +222,12 @@ def obtener_compra(id_compra: int, db: Session = Depends(get_db)):
 # -------------------- POST crear --------------------
 
 @router.post("/", status_code=201)
-def crear_compra(compra_in: CompraInsumosCreate, db: Session = Depends(get_db)):
-    proveedor = (
-        db.query(Proveedor)
-        .filter(Proveedor.id_proveedor == compra_in.id_proveedor, Proveedor.activo == True)
-        .first()
-    )
-    if not proveedor:
-        raise HTTPException(status_code=400, detail="Proveedor no encontrado o inactivo")
+def crear_compra(
+    compra_in: CompraInsumosCreate,
+    optica_id: str = Depends(get_optica_id),
+    db: Session = Depends(get_db),
+):
+    _get_proveedor_optica(db, optica_id, compra_in.id_proveedor)
 
     if not compra_in.items:
         raise HTTPException(status_code=400, detail="La compra debe tener al menos un ítem")
@@ -186,13 +236,7 @@ def crear_compra(compra_in: CompraInsumosCreate, db: Session = Depends(get_db)):
     detalles_objs: List[DetalleCompraInsumos] = []
 
     for item in compra_in.items:
-        insumo = (
-            db.query(Insumo)
-            .filter(Insumo.id_insumo == item.id_insumo, Insumo.activo == True)
-            .first()
-        )
-        if not insumo:
-            raise HTTPException(status_code=400, detail=f"Insumo con id {item.id_insumo} no existe o está inactivo")
+        _get_insumo_optica(db, optica_id, item.id_insumo)
 
         subtotal = item.cantidad * item.precio_unitario
         monto_total += subtotal
@@ -207,6 +251,7 @@ def crear_compra(compra_in: CompraInsumosCreate, db: Session = Depends(get_db)):
         )
 
     compra = CompraInsumos(
+        optica_id=optica_id,
         id_proveedor=compra_in.id_proveedor,
         fecha_compra=compra_in.fecha_compra,
         tipo_comprobante=compra_in.tipo_comprobante,
@@ -221,7 +266,14 @@ def crear_compra(compra_in: CompraInsumosCreate, db: Session = Depends(get_db)):
 
     # actualizar stock
     for item in compra_in.items:
-        insumo = db.query(Insumo).filter(Insumo.id_insumo == item.id_insumo).first()
+        insumo = (
+            db.query(Insumo)
+            .filter(Insumo.id_insumo == item.id_insumo, Insumo.optica_id == optica_id)
+            .first()
+        )
+        if not insumo:
+            raise HTTPException(status_code=400, detail=f"Insumo id {item.id_insumo} no pertenece a esta óptica")
+
         if insumo.stock_actual is None:
             insumo.stock_actual = 0
         insumo.stock_actual += item.cantidad
@@ -238,10 +290,13 @@ def crear_compra(compra_in: CompraInsumosCreate, db: Session = Depends(get_db)):
 # -------------------- PATCH cabecera --------------------
 
 @router.patch("/{id_compra}")
-def patch_compra_cabecera(id_compra: int, data: CompraInsumosPatchCabecera, db: Session = Depends(get_db)):
-    compra = db.query(CompraInsumos).filter(CompraInsumos.id_compra == id_compra).first()
-    if not compra:
-        raise HTTPException(status_code=404, detail="Compra no encontrada")
+def patch_compra_cabecera(
+    id_compra: int,
+    data: CompraInsumosPatchCabecera,
+    optica_id: str = Depends(get_optica_id),
+    db: Session = Depends(get_db),
+):
+    compra = _get_compra_optica(db, optica_id, id_compra)
 
     if compra.anulada:
         raise HTTPException(status_code=400, detail="No se puede modificar una compra anulada")
@@ -268,11 +323,16 @@ def patch_compra_cabecera(id_compra: int, data: CompraInsumosPatchCabecera, db: 
 # -------------------- PATCH anular --------------------
 
 @router.patch("/{id_compra}/anular")
-def anular_compra(id_compra: int, payload: CompraInsumosAnular, db: Session = Depends(get_db)):
+def anular_compra(
+    id_compra: int,
+    payload: CompraInsumosAnular,
+    optica_id: str = Depends(get_optica_id),
+    db: Session = Depends(get_db),
+):
     compra = (
         db.query(CompraInsumos)
         .options(joinedload(CompraInsumos.detalles))
-        .filter(CompraInsumos.id_compra == id_compra)
+        .filter(CompraInsumos.id_compra == id_compra, CompraInsumos.optica_id == optica_id)
         .first()
     )
     if not compra:
@@ -284,11 +344,18 @@ def anular_compra(id_compra: int, payload: CompraInsumosAnular, db: Session = De
     if not compra.detalles:
         raise HTTPException(status_code=400, detail="La compra no tiene detalles para anular")
 
-    # revertir stock
+    # revertir stock (solo insumos de la misma óptica)
     for det in compra.detalles:
-        insumo = db.query(Insumo).filter(Insumo.id_insumo == det.id_insumo).first()
+        insumo = (
+            db.query(Insumo)
+            .filter(Insumo.id_insumo == det.id_insumo, Insumo.optica_id == optica_id)
+            .first()
+        )
         if not insumo:
-            raise HTTPException(status_code=400, detail=f"No existe insumo id {det.id_insumo} para revertir stock")
+            raise HTTPException(
+                status_code=400,
+                detail=f"No existe insumo id {det.id_insumo} en esta óptica para revertir stock",
+            )
 
         if insumo.stock_actual is None:
             insumo.stock_actual = 0

@@ -1,21 +1,26 @@
-import { useEffect, useState } from "react";
-import api from "./lib/api";
+import { Navigate, Route, Routes } from "react-router-dom";
+import AppLayout from "./layout/AppLayout";
 
-function App() {
-  const [status, setStatus] = useState<string>("Cargando...");
+import ClientesList from "./pages/Clientes/ClientesList";
+import ProveedoresList from "./pages/Proveedores/ProveedoresList";
 
-  useEffect(() => {
-    api.get("/")
-      .then(res => setStatus(res.data.message))
-      .catch(() => setStatus("API no disponible"));
-  }, []);
-
+export default function App() {
   return (
-    <div style={{ padding: 20 }}>
-      <h1>Óptica</h1>
-      <p>{status}</p>
-    </div>
+    <Routes>
+      <Route element={<AppLayout />}>
+        <Route path="/" element={<Navigate to="/clientes" replace />} />
+        <Route path="/clientes" element={<ClientesList />} />
+        <Route path="/proveedores" element={<ProveedoresList />} />
+
+        {/* después sumamos */}
+        {/* <Route path="/insumos" element={<InsumosList />} /> */}
+        {/* <Route path="/compras-insumos" element={<ComprasList />} /> */}
+        {/* <Route path="/pedidos-laboratorio" element={<PedidosList />} /> */}
+        {/* <Route path="/recetas" element={<RecetasList />} /> */}
+      </Route>
+
+      {/* 404 */}
+      <Route path="*" element={<Navigate to="/clientes" replace />} />
+    </Routes>
   );
 }
-
-export default App;
