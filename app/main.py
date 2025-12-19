@@ -6,7 +6,6 @@ from app.routers import clientes, proveedores, insumos, recetas, compras_insumos
 
 app = FastAPI(title="API Óptica")
 
-# CORS si lo estás usando con el front en http://localhost:5173
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173"],
@@ -18,7 +17,7 @@ app.add_middleware(
 # CLIENTES
 app.include_router(clientes.router)
 
-# PROVEEDORES  ← IMPORTANTE
+# PROVEEDORES
 app.include_router(proveedores.router)
 
 # INSUMOS

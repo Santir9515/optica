@@ -124,8 +124,7 @@ def crear_insumo(
         _get_proveedor_optica(db, optica_id, data.id_proveedor)
 
     payload = data.model_dump()
-    payload["optica_id"] = optica_id  # <- clave multi-óptica
-
+    payload["optica_id"] = optica_id 
     nuevo = Insumo(**payload)
     db.add(nuevo)
     db.commit()

@@ -1,4 +1,3 @@
-// src/context/OpticaContext.tsx
 import {
   createContext,
   useContext,

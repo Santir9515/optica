@@ -11,8 +11,6 @@ export default function App() {
         <Route path="/" element={<Navigate to="/clientes" replace />} />
         <Route path="/clientes" element={<ClientesList />} />
         <Route path="/proveedores" element={<ProveedoresList />} />
-
-        {/* después sumamos */}
         {/* <Route path="/insumos" element={<InsumosList />} /> */}
         {/* <Route path="/compras-insumos" element={<ComprasList />} /> */}
         {/* <Route path="/pedidos-laboratorio" element={<PedidosList />} /> */}

@@ -113,7 +113,6 @@ def listar_compras_insumos_avanzado(
         )
 
     if id_proveedor is not None:
-        # asegura que el proveedor sea de la óptica (evita filtrar por otro tenant)
         _get_proveedor_optica(db, optica_id, id_proveedor)
         query = query.filter(CompraInsumos.id_proveedor == id_proveedor)
 

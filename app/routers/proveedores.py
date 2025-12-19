@@ -106,7 +106,6 @@ def crear_proveedor(
         db.refresh(nuevo)
     except IntegrityError as e:
         db.rollback()
-        # Si tenés unique por (optica_id, nombre) esto queda perfecto.
         if "nombre" in str(getattr(e, "orig", "")).lower():
             raise HTTPException(status_code=400, detail="Ya existe un proveedor con ese nombre en esta óptica.")
         raise HTTPException(status_code=400, detail="Error al crear proveedor.")

@@ -1,5 +1,5 @@
 from app.database import engine, Base
-from app import models  # 👈 IMPORTANTE: registra todos los modelos al importarlos
+from app import models 
 
 def crear_tablas():
     print("Creando tablas en la base de datos...")

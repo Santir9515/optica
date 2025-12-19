@@ -58,7 +58,6 @@ export default function ProveedoresList() {
       offset,
     })
       .then((res) => {
-        // Por si acaso, defensivo:
         const lista = Array.isArray(res.items) ? res.items : [];
         setItems(lista);
         setTotal(res.total ?? lista.length);

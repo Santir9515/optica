@@ -59,7 +59,7 @@ body { margin: 0; background: var(--bg); color: var(--text); font-family: system
   flex: 1;
   display: grid;
   grid-template-columns: 240px 1fr;
-  min-height: 0; /* importante para scroll */
+  min-height: 0; 
 }
 
 .sidebar {

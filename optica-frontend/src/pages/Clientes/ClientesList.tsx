@@ -1,4 +1,3 @@
-// src/pages/Clientes/ClientesList.tsx
 import { useEffect, useMemo, useState } from "react";
 import { useDebounce } from "../../hooks/useDebounce";
 import { getClientesAvanzado } from "../../api/clientes";
@@ -11,7 +10,7 @@ import type {
 type SortState = { orderBy: ClienteOrderBy; orderDir: OrderDir };
 
 export default function ClientesList() {
-  const [items, setItems] = useState<Cliente[]>([]); // nunca undefined
+  const [items, setItems] = useState<Cliente[]>([]); 
   const [total, setTotal] = useState(0);
 
   const [q, setQ] = useState("");
@@ -41,7 +40,7 @@ export default function ClientesList() {
   const desde = total === 0 ? 0 : offset + 1;
   const hasta = Math.min(offset + limit, total);
 
-  // cuando cambian filtros/sort/limit => volver a página 1
+  
   useEffect(() => {
     setOffset(0);
   }, [qDebounced, activo, sort.orderBy, sort.orderDir, limit]);
@@ -59,9 +58,9 @@ export default function ClientesList() {
     offset,
   })
     .then((res) => {
-      console.log("RES CLIENTES", res);  // <- acá va
+      console.log("RES CLIENTES", res);  
 
-      // por las dudas, si la API no trae items / total
+     
       setItems(res?.items ?? []);
       setTotal(res?.total ?? 0);
     })

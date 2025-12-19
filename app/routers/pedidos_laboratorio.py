@@ -52,8 +52,8 @@ class PedidoEstadoUpdate(BaseModel):
 
 
 class PedidoRecepcionUpdate(BaseModel):
-    fecha_recepcion: Optional[date] = None  # si no viene, usamos hoy
-    estado: Optional[str] = None            # default: RECIBIDO
+    fecha_recepcion: Optional[date] = None  
+    estado: Optional[str] = None            
     nro_orden_lab: Optional[str] = None
     observaciones: Optional[str] = None
     descontar_stock: bool = True

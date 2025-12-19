@@ -8,5 +8,4 @@ const api = axios.create({
 });
 console.log("API BASE", import.meta.env.VITE_API_BASE_URL);
 
-// Por ahora sin interceptor, hasta que usemos selector de óptica
 export { api };
