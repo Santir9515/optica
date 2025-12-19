@@ -4,6 +4,8 @@ import AppLayout from "./layout/AppLayout";
 import ClientesList from "./pages/Clientes/ClientesList";
 import ProveedoresList from "./pages/Proveedores/ProveedoresList";
 import InsumosList from "./pages/Insumos/InsumosList";
+import ComprasList from "./pages/CompraInsumos/ComprasList";
+import CompraDetalle from "./pages/CompraInsumos/CompraDetalle";
 
 export default function App() {
   return (
@@ -13,7 +15,8 @@ export default function App() {
         <Route path="/clientes" element={<ClientesList />} />
         <Route path="/proveedores" element={<ProveedoresList />} />
         <Route path="/insumos" element={<InsumosList />} />
-        {/* <Route path="/compras-insumos" element={<ComprasList />} /> */}
+        <Route path="/compras-insumos" element={<ComprasList />} />
+        <Route path="/compras-insumos/:id_compra" element={<CompraDetalle />} />
         {/* <Route path="/pedidos-laboratorio" element={<PedidosList />} /> */}
         {/* <Route path="/recetas" element={<RecetasList />} /> */}
       </Route>
