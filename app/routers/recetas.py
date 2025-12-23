@@ -3,8 +3,8 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
 from sqlalchemy import or_, asc, desc
+from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
 from app.models import Receta, Cliente
@@ -281,3 +281,46 @@ def patch_receta(
     db.commit()
     db.refresh(receta)
     return {"id_receta": receta.id_receta, "estado": receta.estado}
+
+@router.get("/{id_receta}")
+def obtener_receta(
+    id_receta: int,
+    optica_id: str = Depends(get_optica_id),
+    db: Session = Depends(get_db),
+):
+    receta = (
+        db.query(Receta)
+        .options(joinedload(Receta.cliente))
+        .filter(Receta.id_receta == id_receta, Receta.optica_id == optica_id)
+        .first()
+    )
+    if not receta:
+        raise HTTPException(status_code=404, detail="Receta no encontrada")
+
+    return {
+        "id_receta": receta.id_receta,
+        "id_cliente": receta.id_cliente,
+        "fecha_receta": receta.fecha_receta,
+        "estado": receta.estado,
+        "profesional": receta.profesional,
+        "tipo_lente": receta.tipo_lente,
+        "observaciones": receta.observaciones,
+
+        "od_esfera": receta.od_esfera,
+        "od_cilindro": receta.od_cilindro,
+        "od_eje": receta.od_eje,
+        "ol_esfera": receta.ol_esfera,
+        "ol_cilindro": receta.ol_cilindro,
+        "ol_eje": receta.ol_eje,
+        "adicion": receta.adicion,
+        "dp": receta.dp,
+
+        "cliente": {
+            "id_cliente": receta.cliente.id_cliente if receta.cliente else None,
+            "nombre": receta.cliente.nombre if receta.cliente else None,
+            "apellido": receta.cliente.apellido if receta.cliente else None,
+            "dni": receta.cliente.dni if receta.cliente else None,
+            "telefono": receta.cliente.telefono if receta.cliente else None,
+            "email": receta.cliente.email if receta.cliente else None,
+        },
+    }
