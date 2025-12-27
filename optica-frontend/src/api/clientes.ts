@@ -1,4 +1,3 @@
-// src/api/clientes.ts
 import { api } from "./axios";
 
 /** =======================
@@ -126,4 +125,9 @@ export function fmtDateARFromISO(iso?: string | null) {
   if (!y || !m || !d) return iso;
   return `${d}/${m}/${y}`;
 }
+
+export function deleteCliente(id_cliente: number): Promise<void> {
+  return api.delete(`/clientes/${id_cliente}`).then(() => {});
+}
+
 

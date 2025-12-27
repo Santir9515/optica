@@ -2,9 +2,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useDebounce } from "../../hooks/useDebounce";
-import { getClientesAvanzado } from "../../api/clientes";
+import {
+  getClientesAvanzado,
+  deleteCliente,
+  fmtDateARFromISO,
+} from "../../api/clientes";
 import type { Cliente, ClienteOrderBy, OrderDir } from "../../api/clientes";
-import { fmtDateARFromISO } from "../../api/clientes";
 
 type SortState = { orderBy: ClienteOrderBy; orderDir: OrderDir };
 
@@ -45,29 +48,31 @@ export default function ClientesList() {
     setOffset(0);
   }, [qDebounced, activo, sort.orderBy, sort.orderDir, limit]);
 
-  useEffect(() => {
+  async function fetchData() {
     setLoading(true);
     setError(null);
+    try {
+      const res = await getClientesAvanzado({
+        q: qDebounced.trim() || undefined,
+        activo,
+        order_by: sort.orderBy,
+        order_dir: sort.orderDir,
+        limit,
+        offset,
+      });
+      setItems(res?.items ?? []);
+      setTotal(res?.total ?? 0);
+    } catch (e: any) {
+      setError(e?.message ?? "Error consultando API");
+      setItems([]);
+      setTotal(0);
+    } finally {
+      setLoading(false);
+    }
+  }
 
-    getClientesAvanzado({
-      q: qDebounced.trim() || undefined,
-      activo,
-      order_by: sort.orderBy,
-      order_dir: sort.orderDir,
-      limit,
-      offset,
-    })
-      .then((res) => {
-        console.log("RES CLIENTES", res);
-        setItems(res?.items ?? []);
-        setTotal(res?.total ?? 0);
-      })
-      .catch((e) => {
-        setError(e?.message ?? "Error consultando API");
-        setItems([]);
-        setTotal(0);
-      })
-      .finally(() => setLoading(false));
+  useEffect(() => {
+    fetchData();
   }, [qDebounced, activo, sort.orderBy, sort.orderDir, limit, offset]);
 
   function prevPage() {
@@ -90,16 +95,47 @@ export default function ClientesList() {
     return sort.orderDir === "asc" ? " ▲" : " ▼";
   }
 
+  async function onDelete(id_cliente: number, label?: string) {
+    const ok = window.confirm(
+      `¿Seguro que querés eliminar el cliente${label ? ` "${label}"` : ""}?\n\nEsto lo eliminará de la base de datos de forma permanente`
+    );
+    if (!ok) return;
+
+    setLoading(true);
+    setError(null);
+    try {
+      await deleteCliente(id_cliente);
+      await fetchData(); 
+    } catch (e: any) {
+      setError(e?.message ?? "Error eliminando cliente");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <div style={{ padding: 16 }}>
       {/* Header + ABM */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+        }}
+      >
         <h1>Clientes</h1>
         <Link to="/clientes/nuevo">+ Nuevo</Link>
       </div>
 
       {/* Filtros */}
-      <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12 }}>
+      <div
+        style={{
+          display: "flex",
+          gap: 12,
+          alignItems: "center",
+          marginBottom: 12,
+        }}
+      >
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
@@ -125,7 +161,14 @@ export default function ClientesList() {
       </div>
 
       {/* Paginación */}
-      <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12 }}>
+      <div
+        style={{
+          display: "flex",
+          gap: 12,
+          alignItems: "center",
+          marginBottom: 12,
+        }}
+      >
         <button onClick={prevPage} disabled={!canPrev}>
           Anterior
         </button>
@@ -141,7 +184,10 @@ export default function ClientesList() {
         <div style={{ marginLeft: "auto" }}>
           <label>
             Por página:{" "}
-            <select value={limit} onChange={(e) => setLimit(Number(e.target.value))}>
+            <select
+              value={limit}
+              onChange={(e) => setLimit(Number(e.target.value))}
+            >
               {[5, 10, 20, 50].map((n) => (
                 <option key={n} value={n}>
                   {n}
@@ -162,58 +208,118 @@ export default function ClientesList() {
             <tr>
               <th
                 onClick={() => toggleSort("dni")}
-                style={{ textAlign: "left", borderBottom: "1px solid #444", padding: 8, cursor: "pointer" }}
+                style={{
+                  textAlign: "left",
+                  borderBottom: "1px solid #444",
+                  padding: 8,
+                  cursor: "pointer",
+                }}
               >
                 DNI{sortIndicator("dni")}
               </th>
 
               <th
                 onClick={() => toggleSort("nombre")}
-                style={{ textAlign: "left", borderBottom: "1px solid #444", padding: 8, cursor: "pointer" }}
+                style={{
+                  textAlign: "left",
+                  borderBottom: "1px solid #444",
+                  padding: 8,
+                  cursor: "pointer",
+                }}
               >
                 Nombre{sortIndicator("nombre")}
               </th>
 
               <th
                 onClick={() => toggleSort("apellido")}
-                style={{ textAlign: "left", borderBottom: "1px solid #444", padding: 8, cursor: "pointer" }}
+                style={{
+                  textAlign: "left",
+                  borderBottom: "1px solid #444",
+                  padding: 8,
+                  cursor: "pointer",
+                }}
               >
                 Apellido{sortIndicator("apellido")}
               </th>
 
               <th
                 onClick={() => toggleSort("fecha_alta")}
-                style={{ textAlign: "left", borderBottom: "1px solid #444", padding: 8, cursor: "pointer" }}
+                style={{
+                  textAlign: "left",
+                  borderBottom: "1px solid #444",
+                  padding: 8,
+                  cursor: "pointer",
+                }}
               >
                 Fecha alta{sortIndicator("fecha_alta")}
               </th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #444", padding: 8 }}>
+
+              <th
+                style={{
+                  textAlign: "left",
+                  borderBottom: "1px solid #444",
+                  padding: 8,
+                }}
+              >
                 Activo
               </th>
 
-              <th style={{ textAlign: "center", borderBottom: "1px solid #444", padding: 8 }}>
+              <th
+                style={{
+                  textAlign: "center",
+                  borderBottom: "1px solid #444",
+                  padding: 8,
+                }}
+              >
                 Acciones
               </th>
             </tr>
           </thead>
 
           <tbody>
-            {(items ?? []).map((c) => (
+            {items.map((c) => (
               <tr key={c.id_cliente}>
-                <td style={{ padding: 8, borderBottom: "1px solid #333" }}>{c.dni}</td>
-                <td style={{ padding: 8, borderBottom: "1px solid #333" }}>{c.nombre}</td>
-                <td style={{ padding: 8, borderBottom: "1px solid #333" }}>{c.apellido}</td>
-
+                <td style={{ padding: 8, borderBottom: "1px solid #333" }}>
+                  {c.dni}
+                </td>
+                <td style={{ padding: 8, borderBottom: "1px solid #333" }}>
+                  {c.nombre}
+                </td>
+                <td style={{ padding: 8, borderBottom: "1px solid #333" }}>
+                  {c.apellido}
+                </td>
                 <td style={{ padding: 8, borderBottom: "1px solid #333" }}>
                   {fmtDateARFromISO(c.fecha_alta)}
                 </td>
                 <td style={{ padding: 8, borderBottom: "1px solid #333" }}>
                   {c.activo ? "Sí" : "No"}
                 </td>
+                <td
+                  style={{
+                    padding: 8,
+                    borderBottom: "1px solid #333",
+                    textAlign: "center",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  <Link to={`/clientes/${c.id_cliente}`} style={{ marginRight: 12 }}>
+                    Ver
+                  </Link>
+                  <Link to={`/clientes/${c.id_cliente}/editar`} style={{ marginRight: 12 }}>
+                    Editar
+                  </Link>
 
-                <td style={{ padding: 8, borderBottom: "1px solid #333", textAlign: "center" }}>
-                  <Link to={`/clientes/${c.id_cliente}`}>Ver</Link>{" "}
-                  <Link to={`/clientes/${c.id_cliente}/editar`}>Editar</Link>
+                  <button
+                    onClick={() => onDelete(c.id_cliente, `${c.apellido}, ${c.nombre}`)}
+                    style={{
+                      background: "transparent",
+                      border: "1px solid #a33",
+                      padding: "4px 8px",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Eliminar
+                  </button>
                 </td>
               </tr>
             ))}
