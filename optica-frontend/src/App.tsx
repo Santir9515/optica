@@ -21,8 +21,8 @@ export default function App() {
         <Route path="/" element={<Navigate to="/clientes" replace />} />
 
         <Route path="/clientes" element={<ClientesList />} />
-        <Route path="/clientes/nuevo" element={<ClienteForm mode="create" />} />
-        <Route path="/clientes/:id_cliente/editar" element={<ClienteForm mode="edit" />} />
+        <Route path="/clientes/nuevo" element={<ClienteForm/>} />
+        <Route path="/clientes/:id_cliente/editar" element={<ClienteForm />} />
         <Route path="/clientes/:id_cliente" element={<ClienteDetalle />} />
 
         <Route path="/proveedores" element={<ProveedoresList />} />

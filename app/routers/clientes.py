@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import or_, asc, desc
 from sqlalchemy.orm import Session
-
+from app.schemas.cliente import ClienteOut, ClienteCreate, ClienteUpdate
 from app.database import get_db
 from app.models import Cliente
 from app.dependencies.optica import get_optica_id
@@ -238,6 +238,40 @@ def obtener_cliente(
     )
     if not cliente:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
+    return cliente
+
+@router.patch("/{id_cliente}", response_model=ClienteOut)
+def actualizar_cliente(
+    id_cliente: int,
+    data: ClienteUpdate,
+    optica_id: str = Depends(get_optica_id),
+    db: Session = Depends(get_db),
+):
+    cliente = (
+        db.query(Cliente)
+        .filter(Cliente.id_cliente == id_cliente, Cliente.optica_id == optica_id)
+        .first()
+    )
+    if not cliente:
+        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+
+    patch = data.model_dump(exclude_unset=True)
+
+#Validacion para que el dni no sea repetido
+    if "dni" in patch and patch["dni"] is not None and patch["dni"] != cliente.dni:
+        existe = (
+            db.query(Cliente)
+            .filter(Cliente.optica_id == optica_id, Cliente.dni == patch["dni"])
+            .first()
+        )
+        if existe:
+            raise HTTPException(status_code=400, detail="Ya existe un cliente con ese DNI en esta óptica")
+
+    for k, v in patch.items():
+        setattr(cliente, k, v)
+
+    db.commit()
+    db.refresh(cliente)
     return cliente
 
 

@@ -1,5 +1,4 @@
-// src/pages/Clientes/ClientesList.tsx
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useDebounce } from "../../hooks/useDebounce";
 import {
@@ -48,32 +47,43 @@ export default function ClientesList() {
     setOffset(0);
   }, [qDebounced, activo, sort.orderBy, sort.orderDir, limit]);
 
-  async function fetchData() {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await getClientesAvanzado({
-        q: qDebounced.trim() || undefined,
-        activo,
-        order_by: sort.orderBy,
-        order_dir: sort.orderDir,
-        limit,
-        offset,
-      });
-      setItems(res?.items ?? []);
-      setTotal(res?.total ?? 0);
-    } catch (e: any) {
-      setError(e?.message ?? "Error consultando API");
-      setItems([]);
-      setTotal(0);
-    } finally {
-      setLoading(false);
-    }
-  }
+  const fetchData = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      const silent = opts?.silent ?? false;
+
+      if (!silent) setLoading(true);
+      setError(null);
+
+      try {
+        const res = await getClientesAvanzado({
+          q: qDebounced.trim() || undefined,
+          activo,
+          order_by: sort.orderBy,
+          order_dir: sort.orderDir,
+          limit,
+          offset,
+        });
+
+        setItems(res?.items ?? []);
+        setTotal(res?.total ?? 0);
+      } catch (e: any) {
+        const msg =
+          e?.response?.data?.detail ??
+          e?.message ??
+          "Error consultando API";
+        setError(msg);
+        setItems([]);
+        setTotal(0);
+      } finally {
+        if (!silent) setLoading(false);
+      }
+    },
+    [qDebounced, activo, sort.orderBy, sort.orderDir, limit, offset]
+  );
 
   useEffect(() => {
     fetchData();
-  }, [qDebounced, activo, sort.orderBy, sort.orderDir, limit, offset]);
+  }, [fetchData]);
 
   function prevPage() {
     setOffset((o) => Math.max(0, o - limit));
@@ -97,17 +107,25 @@ export default function ClientesList() {
 
   async function onDelete(id_cliente: number, label?: string) {
     const ok = window.confirm(
-      `¿Seguro que querés eliminar el cliente${label ? ` "${label}"` : ""}?\n\nEsto lo eliminará de la base de datos de forma permanente`
+      `¿Seguro que querés eliminar el cliente${label ? ` "${label}"` : ""}?\n\n` +
+        `Esto lo eliminará de la base de datos`
     );
     if (!ok) return;
 
     setLoading(true);
     setError(null);
+
     try {
       await deleteCliente(id_cliente);
-      await fetchData(); 
+
+      // refrescar sin duplicar el loading (ya está en true)
+      await fetchData({ silent: true });
     } catch (e: any) {
-      setError(e?.message ?? "Error eliminando cliente");
+      const msg =
+        e?.response?.data?.detail ??
+        e?.message ??
+        "Error eliminando cliente";
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -121,6 +139,7 @@ export default function ClientesList() {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
+          marginBottom: 8,
         }}
       >
         <h1>Clientes</h1>
@@ -134,6 +153,7 @@ export default function ClientesList() {
           gap: 12,
           alignItems: "center",
           marginBottom: 12,
+          flexWrap: "wrap",
         }}
       >
         <input
@@ -167,6 +187,7 @@ export default function ClientesList() {
           gap: 12,
           alignItems: "center",
           marginBottom: 12,
+          flexWrap: "wrap",
         }}
       >
         <button onClick={prevPage} disabled={!canPrev}>
@@ -302,15 +323,23 @@ export default function ClientesList() {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  <Link to={`/clientes/${c.id_cliente}`} style={{ marginRight: 12 }}>
+                  <Link
+                    to={`/clientes/${c.id_cliente}`}
+                    style={{ marginRight: 12 }}
+                  >
                     Ver
                   </Link>
-                  <Link to={`/clientes/${c.id_cliente}/editar`} style={{ marginRight: 12 }}>
+                  <Link
+                    to={`/clientes/${c.id_cliente}/editar`}
+                    style={{ marginRight: 12 }}
+                  >
                     Editar
                   </Link>
 
                   <button
-                    onClick={() => onDelete(c.id_cliente, `${c.apellido}, ${c.nombre}`)}
+                    onClick={() =>
+                      onDelete(c.id_cliente, `${c.apellido}, ${c.nombre}`)
+                    }
                     style={{
                       background: "transparent",
                       border: "1px solid #a33",
