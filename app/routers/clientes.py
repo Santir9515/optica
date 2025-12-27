@@ -42,8 +42,6 @@ class ClienteOut(BaseModel):
     id_cliente_legacy: Optional[str] = None
 
     class Config:
-        # Pydantic v2 acepta from_attributes; pero si estás en v1, orm_mode.
-        # Para compatibilidad rápida con tu proyecto actual:
         orm_mode = True
 
 
@@ -137,7 +135,6 @@ def crear_cliente(
     optica_id: str = Depends(get_optica_id),
     db: Session = Depends(get_db),
 ):
-    # DNI único por óptica (multi-tenant)
     existente = (
         db.query(Cliente)
         .filter(Cliente.optica_id == optica_id, Cliente.dni == cliente.dni)
@@ -146,7 +143,11 @@ def crear_cliente(
     if existente:
         raise HTTPException(status_code=400, detail="Ya existe un cliente con ese DNI en esta óptica")
 
-    nuevo = Cliente(**cliente.model_dump(), optica_id=optica_id)
+    data = cliente.model_dump()
+    data["optica_id"] = optica_id
+    data["fecha_alta"] = date.today()
+
+    nuevo = Cliente(**data)
     db.add(nuevo)
     db.commit()
     db.refresh(nuevo)

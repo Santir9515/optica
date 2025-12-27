@@ -1,22 +1,22 @@
+// src/pages/Clientes/ClientesList.tsx
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useDebounce } from "../../hooks/useDebounce";
 import { getClientesAvanzado } from "../../api/clientes";
-import type {
-  Cliente,
-  ClienteOrderBy,
-  OrderDir,
-} from "../../api/clientes";
+import type { Cliente, ClienteOrderBy, OrderDir } from "../../api/clientes";
+import { fmtDateARFromISO } from "../../api/clientes";
 
 type SortState = { orderBy: ClienteOrderBy; orderDir: OrderDir };
 
 export default function ClientesList() {
-  const [items, setItems] = useState<Cliente[]>([]); 
+  const [items, setItems] = useState<Cliente[]>([]);
   const [total, setTotal] = useState(0);
 
   const [q, setQ] = useState("");
   const qDebounced = useDebounce(q, 400);
 
   const [activo, setActivo] = useState<boolean | undefined>(true);
+
   const [sort, setSort] = useState<SortState>({
     orderBy: "apellido",
     orderDir: "asc",
@@ -40,37 +40,35 @@ export default function ClientesList() {
   const desde = total === 0 ? 0 : offset + 1;
   const hasta = Math.min(offset + limit, total);
 
-  
+  // cuando cambian filtros/sort/limit => volver a página 1
   useEffect(() => {
     setOffset(0);
   }, [qDebounced, activo, sort.orderBy, sort.orderDir, limit]);
 
   useEffect(() => {
-  setLoading(true);
-  setError(null);
+    setLoading(true);
+    setError(null);
 
-  getClientesAvanzado({
-    q: qDebounced.trim() || undefined,
-    activo,
-    order_by: sort.orderBy,
-    order_dir: sort.orderDir,
-    limit,
-    offset,
-  })
-    .then((res) => {
-      console.log("RES CLIENTES", res);  
-
-     
-      setItems(res?.items ?? []);
-      setTotal(res?.total ?? 0);
+    getClientesAvanzado({
+      q: qDebounced.trim() || undefined,
+      activo,
+      order_by: sort.orderBy,
+      order_dir: sort.orderDir,
+      limit,
+      offset,
     })
-    .catch((e) => {
-      setError(e?.message ?? "Error consultando API");
-      setItems([]);
-      setTotal(0);
-    })
-    .finally(() => setLoading(false));
-}, [qDebounced, activo, sort.orderBy, sort.orderDir, limit, offset]);
+      .then((res) => {
+        console.log("RES CLIENTES", res);
+        setItems(res?.items ?? []);
+        setTotal(res?.total ?? 0);
+      })
+      .catch((e) => {
+        setError(e?.message ?? "Error consultando API");
+        setItems([]);
+        setTotal(0);
+      })
+      .finally(() => setLoading(false));
+  }, [qDebounced, activo, sort.orderBy, sort.orderDir, limit, offset]);
 
   function prevPage() {
     setOffset((o) => Math.max(0, o - limit));
@@ -78,10 +76,6 @@ export default function ClientesList() {
 
   function nextPage() {
     setOffset((o) => o + limit);
-  }
-
-  function onChangeLimit(v: number) {
-    setLimit(v);
   }
 
   function toggleSort(col: ClienteOrderBy) {
@@ -98,16 +92,14 @@ export default function ClientesList() {
 
   return (
     <div style={{ padding: 16 }}>
-      <h1>Clientes</h1>
+      {/* Header + ABM */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <h1>Clientes</h1>
+        <Link to="/clientes/nuevo">+ Nuevo</Link>
+      </div>
 
-      <div
-        style={{
-          display: "flex",
-          gap: 12,
-          alignItems: "center",
-          marginBottom: 12,
-        }}
-      >
+      {/* Filtros */}
+      <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12 }}>
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
@@ -132,14 +124,8 @@ export default function ClientesList() {
         </label>
       </div>
 
-      <div
-        style={{
-          display: "flex",
-          gap: 12,
-          alignItems: "center",
-          marginBottom: 12,
-        }}
-      >
+      {/* Paginación */}
+      <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12 }}>
         <button onClick={prevPage} disabled={!canPrev}>
           Anterior
         </button>
@@ -155,10 +141,7 @@ export default function ClientesList() {
         <div style={{ marginLeft: "auto" }}>
           <label>
             Por página:{" "}
-            <select
-              value={limit}
-              onChange={(e) => onChangeLimit(Number(e.target.value))}
-            >
+            <select value={limit} onChange={(e) => setLimit(Number(e.target.value))}>
               {[5, 10, 20, 50].map((n) => (
                 <option key={n} value={n}>
                   {n}
@@ -172,53 +155,44 @@ export default function ClientesList() {
       {loading && <p>Cargando clientes...</p>}
       {error && <p style={{ color: "crimson" }}>Error: {error}</p>}
 
+      {/* Tabla */}
       {!loading && !error && (
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr>
               <th
                 onClick={() => toggleSort("dni")}
-                style={{
-                  textAlign: "left",
-                  borderBottom: "1px solid #444",
-                  padding: 8,
-                  cursor: "pointer",
-                }}
+                style={{ textAlign: "left", borderBottom: "1px solid #444", padding: 8, cursor: "pointer" }}
               >
                 DNI{sortIndicator("dni")}
               </th>
+
               <th
                 onClick={() => toggleSort("nombre")}
-                style={{
-                  textAlign: "left",
-                  borderBottom: "1px solid #444",
-                  padding: 8,
-                  cursor: "pointer",
-                }}
+                style={{ textAlign: "left", borderBottom: "1px solid #444", padding: 8, cursor: "pointer" }}
               >
                 Nombre{sortIndicator("nombre")}
               </th>
+
               <th
                 onClick={() => toggleSort("apellido")}
-                style={{
-                  textAlign: "left",
-                  borderBottom: "1px solid #444",
-                  padding: 8,
-                  cursor: "pointer",
-                }}
+                style={{ textAlign: "left", borderBottom: "1px solid #444", padding: 8, cursor: "pointer" }}
               >
                 Apellido{sortIndicator("apellido")}
               </th>
+
               <th
                 onClick={() => toggleSort("fecha_alta")}
-                style={{
-                  textAlign: "left",
-                  borderBottom: "1px solid #444",
-                  padding: 8,
-                  cursor: "pointer",
-                }}
+                style={{ textAlign: "left", borderBottom: "1px solid #444", padding: 8, cursor: "pointer" }}
               >
-                Activo{sortIndicator("fecha_alta")}
+                Fecha alta{sortIndicator("fecha_alta")}
+              </th>
+              <th style={{ textAlign: "left", borderBottom: "1px solid #444", padding: 8 }}>
+                Activo
+              </th>
+
+              <th style={{ textAlign: "center", borderBottom: "1px solid #444", padding: 8 }}>
+                Acciones
               </th>
             </tr>
           </thead>
@@ -226,17 +200,20 @@ export default function ClientesList() {
           <tbody>
             {(items ?? []).map((c) => (
               <tr key={c.id_cliente}>
+                <td style={{ padding: 8, borderBottom: "1px solid #333" }}>{c.dni}</td>
+                <td style={{ padding: 8, borderBottom: "1px solid #333" }}>{c.nombre}</td>
+                <td style={{ padding: 8, borderBottom: "1px solid #333" }}>{c.apellido}</td>
+
                 <td style={{ padding: 8, borderBottom: "1px solid #333" }}>
-                  {c.dni}
-                </td>
-                <td style={{ padding: 8, borderBottom: "1px solid #333" }}>
-                  {c.nombre}
-                </td>
-                <td style={{ padding: 8, borderBottom: "1px solid #333" }}>
-                  {c.apellido}
+                  {fmtDateARFromISO(c.fecha_alta)}
                 </td>
                 <td style={{ padding: 8, borderBottom: "1px solid #333" }}>
                   {c.activo ? "Sí" : "No"}
+                </td>
+
+                <td style={{ padding: 8, borderBottom: "1px solid #333", textAlign: "center" }}>
+                  <Link to={`/clientes/${c.id_cliente}`}>Ver</Link>{" "}
+                  <Link to={`/clientes/${c.id_cliente}/editar`}>Editar</Link>
                 </td>
               </tr>
             ))}

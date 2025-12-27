@@ -10,6 +10,8 @@ import CompraDetalle from "./pages/CompraInsumos/CompraDetalle";
 import PedidosLabList from "./pages/PedidosLaboratorio/PedidosLabList";
 import RecetasList from "./pages/Recetas/RecetasList";
 import RecetaDetalle from "./pages/Recetas/DetalleReceta";
+import ClienteForm from "./pages/Clientes/ClienteForm";
+import ClienteDetalle from "./pages/Clientes/ClienteDetalle";
 
 export default function App() {
   return (
@@ -19,6 +21,10 @@ export default function App() {
         <Route path="/" element={<Navigate to="/clientes" replace />} />
 
         <Route path="/clientes" element={<ClientesList />} />
+        <Route path="/clientes/nuevo" element={<ClienteForm mode="create" />} />
+        <Route path="/clientes/:id_cliente/editar" element={<ClienteForm mode="edit" />} />
+        <Route path="/clientes/:id_cliente" element={<ClienteDetalle />} />
+
         <Route path="/proveedores" element={<ProveedoresList />} />
         <Route path="/insumos" element={<InsumosList />} />
 

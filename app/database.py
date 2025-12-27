@@ -18,9 +18,9 @@ DATABASE_URL = (
 # Motor de conexión
 engine = create_engine(
     DATABASE_URL,
-    echo=True,              # Muestra en consola todas las consultas SQL
-    future=True,            # Activa modo moderno de SQLAlchemy
-    pool_pre_ping=True      # Detecta conexiones muertas automáticamente
+    echo=True,              
+    future=True,            
+    pool_pre_ping=True      
 )
 
 # Creador de sesiones
