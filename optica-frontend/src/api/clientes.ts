@@ -13,12 +13,12 @@ export interface Cliente {
   email?: string | null;
   direccion?: string | null;
   observaciones?: string | null;
-  fecha_alta?: string | null;
+  fecha_alta?: string | null; // ISO "YYYY-MM-DD"
   activo: boolean;
 }
 
 export interface ClienteDetalle extends Cliente {
-  fecha_nacimiento?: string | null;
+  fecha_nacimiento?: string | null; // ISO "YYYY-MM-DD"
 }
 
 /** =======================
@@ -44,7 +44,6 @@ export interface ClienteUpdate extends Partial<ClienteCreate> {}
  *  ======================= */
 
 export type OrderDir = "asc" | "desc";
-
 export type ClienteOrderBy = "dni" | "nombre" | "apellido" | "fecha_alta";
 
 export interface ClientesAvanzadoParams {
@@ -79,6 +78,19 @@ function cleanParams<T extends Record<string, any>>(params: T): Partial<T> {
   return out as Partial<T>;
 }
 
+export function fmtDateARFromISO(value?: string | null): string {
+  if (!value) return "-";
+  // Soporta "YYYY-MM-DD" y "YYYY-MM-DDTHH:mm:ss..."
+  const iso = value.split("T")[0];
+  const [y, m, d] = iso.split("-");
+  if (!y || !m || !d) return value;
+  return `${d}/${m}/${y}`;
+}
+
+export function isoFromInputDate(value: string): string | null {
+  return value?.trim() ? value : null;
+}
+
 /** =======================
  *  Requests
  *  ======================= */
@@ -95,28 +107,28 @@ export function updateCliente(id_cliente: number, payload: ClienteUpdate): Promi
   return api.patch(`/clientes/${id_cliente}`, payload).then((r) => r.data);
 }
 
-export function setClienteActivo(
-  id_cliente: number,
-  activo: boolean
-): Promise<any> {
+/**
+ * Activa/Desactiva (soft delete)
+ */
+export function setClienteActivo(id_cliente: number, activo: boolean): Promise<any> {
   return api.patch(`/clientes/${id_cliente}`, { activo }).then((r) => r.data);
 }
 
-export function getClientesAvanzado(params: ClientesAvanzadoParams): Promise<ClientesAvanzadoResponse> {
-  return api.get("/clientes/avanzado", { params }).then((res) => res.data);
+
+export function deactivateCliente(id_cliente: number): Promise<any> {
+  return setClienteActivo(id_cliente, false);
 }
 
-export function fmtDateARFromISO(value?: string | null): string {
-  if (!value) return "-";
-  const [y, m, d] = value.split("-");
-  if (!y || !m || !d) return value;
-  return `${d}/${m}/${y}`;
+export function reactivateCliente(id_cliente: number): Promise<any> {
+  return setClienteActivo(id_cliente, true);
 }
+
+
+export function getClientesAvanzado(params: ClientesAvanzadoParams): Promise<ClientesAvanzadoResponse> {
+  return api.get("/clientes/avanzado", { params: cleanParams(params) }).then((res) => res.data);
+}
+
 
 export function deleteCliente(id_cliente: number): Promise<void> {
   return api.delete(`/clientes/${id_cliente}`).then(() => undefined);
-}
-
-export function isoFromInputDate(value: string): string | null {
-  return value?.trim() ? value : null;
 }

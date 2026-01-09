@@ -1,9 +1,10 @@
+// src/pages/Clientes/ClientesList.tsx
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useDebounce } from "../../hooks/useDebounce";
 import {
   getClientesAvanzado,
-  deleteCliente,
+  setClienteActivo,
   fmtDateARFromISO,
 } from "../../api/clientes";
 import type { Cliente, ClienteOrderBy, OrderDir } from "../../api/clientes";
@@ -68,9 +69,7 @@ export default function ClientesList() {
         setTotal(res?.total ?? 0);
       } catch (e: any) {
         const msg =
-          e?.response?.data?.detail ??
-          e?.message ??
-          "Error consultando API";
+          e?.response?.data?.detail ?? e?.message ?? "Error consultando API";
         setError(msg);
         setItems([]);
         setTotal(0);
@@ -105,26 +104,42 @@ export default function ClientesList() {
     return sort.orderDir === "asc" ? " ▲" : " ▼";
   }
 
-  async function onDelete(id_cliente: number, label?: string) {
+  async function onDeactivate(id_cliente: number, label?: string) {
     const ok = window.confirm(
-      `¿Seguro que querés eliminar el cliente${label ? ` "${label}"` : ""}?\n\n` +
-        `Esto lo eliminará de la base de datos`
+      `¿Seguro que querés desactivar el cliente${label ? ` "${label}"` : ""}?\n\n` +
+        `Esto NO lo elimina: solo lo marca como INACTIVO.`
     );
     if (!ok) return;
 
     setLoading(true);
     setError(null);
-
     try {
-      await deleteCliente(id_cliente);
-
+      await setClienteActivo(id_cliente, false);
       // refrescar sin duplicar el loading (ya está en true)
       await fetchData({ silent: true });
     } catch (e: any) {
       const msg =
-        e?.response?.data?.detail ??
-        e?.message ??
-        "Error eliminando cliente";
+        e?.response?.data?.detail ?? e?.message ?? "Error desactivando cliente";
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function onReactivate(id_cliente: number, label?: string) {
+    const ok = window.confirm(
+      `¿Seguro que querés reactivar el cliente${label ? ` "${label}"` : ""}?`
+    );
+    if (!ok) return;
+
+    setLoading(true);
+    setError(null);
+    try {
+      await setClienteActivo(id_cliente, true);
+      await fetchData({ silent: true });
+    } catch (e: any) {
+      const msg =
+        e?.response?.data?.detail ?? e?.message ?? "Error reactivando cliente";
       setError(msg);
     } finally {
       setLoading(false);
@@ -336,19 +351,35 @@ export default function ClientesList() {
                     Editar
                   </Link>
 
-                  <button
-                    onClick={() =>
-                      onDelete(c.id_cliente, `${c.apellido}, ${c.nombre}`)
-                    }
-                    style={{
-                      background: "transparent",
-                      border: "1px solid #a33",
-                      padding: "4px 8px",
-                      cursor: "pointer",
-                    }}
-                  >
-                    Eliminar
-                  </button>
+                  {c.activo ? (
+                    <button
+                      onClick={() =>
+                        onDeactivate(c.id_cliente, `${c.apellido}, ${c.nombre}`)
+                      }
+                      style={{
+                        background: "transparent",
+                        border: "1px solid #a33",
+                        padding: "4px 8px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Desactivar
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() =>
+                        onReactivate(c.id_cliente, `${c.apellido}, ${c.nombre}`)
+                      }
+                      style={{
+                        background: "transparent",
+                        border: "1px solid #3a3",
+                        padding: "4px 8px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Reactivar
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}
