@@ -3,13 +3,23 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from typing import Optional
 from sqlalchemy import or_, asc, desc
-
+from pydantic import BaseModel
 from app.database import get_db
 from app.models import Proveedor
 from app.schemas.proveedor import ProveedorCreate, ProveedorOut
 from app.dependencies.optica import get_optica_id
 
 router = APIRouter(prefix="/proveedores", tags=["Proveedores"])
+
+class ProveedorPatch(BaseModel):
+    nombre: Optional[str] = None
+    telefono: Optional[str] = None
+    email: Optional[str] = None
+    direccion: Optional[str] = None
+    activo: Optional[bool] = None
+
+class ProveedorActivoUpdate(BaseModel):
+    activo: bool
 
 
 @router.get("/avanzado")
@@ -147,6 +157,34 @@ def proveedores_select(
     rows = query.order_by(Proveedor.nombre.asc()).limit(limit).all()
     return [{"id": p.id_proveedor, "label": p.nombre} for p in rows]
 
+@router.patch("/{id_proveedor}/activo")
+def set_proveedor_activo(
+    id_proveedor: int,
+    data: ProveedorActivoUpdate,
+    optica_id: str = Depends(get_optica_id),
+    db: Session = Depends(get_db),
+):
+    proveedor = (
+        db.query(Proveedor)
+        .filter(
+            Proveedor.id_proveedor == id_proveedor,
+            Proveedor.optica_id == optica_id,
+        )
+        .first()
+    )
+    if not proveedor:
+        raise HTTPException(status_code=404, detail="Proveedor no encontrado.")
+
+    proveedor.activo = data.activo
+    db.commit()
+    db.refresh(proveedor)
+
+    return {
+        "id_proveedor": proveedor.id_proveedor,
+        "activo": proveedor.activo,
+        "detail": "Proveedor actualizado correctamente.",
+    }
+
 
 @router.get("/{id_proveedor}", response_model=ProveedorOut)
 def obtener_proveedor(
@@ -188,6 +226,55 @@ def actualizar_proveedor(
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=400, detail="El nombre del proveedor ya existe en esta óptica.")
+
+    return proveedor
+
+
+@router.patch("/{id_proveedor}", response_model=ProveedorOut)
+def patch_proveedor(
+    id_proveedor: int,
+    data: ProveedorPatch,
+    optica_id: str = Depends(get_optica_id),
+    db: Session = Depends(get_db),
+):
+    proveedor = (
+        db.query(Proveedor)
+        .filter(Proveedor.id_proveedor == id_proveedor, Proveedor.optica_id == optica_id)
+        .first()
+    )
+    if not proveedor:
+        raise HTTPException(status_code=404, detail="Proveedor no encontrado.")
+
+    patch = data.model_dump(exclude_unset=True)
+    if not patch:
+        raise HTTPException(status_code=400, detail="No se enviaron campos")
+
+    # normalizaciones simples
+    if "nombre" in patch and patch["nombre"] is not None:
+        patch["nombre"] = patch["nombre"].strip()
+        if not patch["nombre"]:
+            raise HTTPException(status_code=400, detail="El nombre no puede ser vacío.")
+
+    if "email" in patch and patch["email"] is not None:
+        patch["email"] = patch["email"].strip() or None
+
+    if "telefono" in patch and patch["telefono"] is not None:
+        patch["telefono"] = patch["telefono"].strip() or None
+
+    if "direccion" in patch and patch["direccion"] is not None:
+        patch["direccion"] = patch["direccion"].strip() or None
+
+    for k, v in patch.items():
+        setattr(proveedor, k, v)
+
+    try:
+        db.commit()
+        db.refresh(proveedor)
+    except IntegrityError as e:
+        db.rollback()
+        if "nombre" in str(getattr(e, "orig", "")).lower():
+            raise HTTPException(status_code=400, detail="El nombre del proveedor ya existe en esta óptica.")
+        raise HTTPException(status_code=400, detail="Error al actualizar proveedor.")
 
     return proveedor
 

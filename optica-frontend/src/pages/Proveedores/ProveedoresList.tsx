@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useDebounce } from "../../hooks/useDebounce";
 import {
   getProveedoresAvanzado,
-  type Proveedor,
-  type ProveedorOrderBy,
-  type OrderDir,
+  setProveedorActivo,
 } from "../../api/proveedores";
+import type { Proveedor, ProveedorOrderBy, OrderDir } from "../../api/proveedores";
 
 type SortState = { orderBy: ProveedorOrderBy; orderDir: OrderDir };
 
@@ -17,6 +17,7 @@ export default function ProveedoresList() {
   const qDebounced = useDebounce(q, 400);
 
   const [activo, setActivo] = useState<boolean | undefined>(true);
+
   const [sort, setSort] = useState<SortState>({
     orderBy: "nombre",
     orderDir: "asc",
@@ -40,31 +41,43 @@ export default function ProveedoresList() {
   const desde = total === 0 ? 0 : offset + 1;
   const hasta = Math.min(offset + limit, total);
 
-  // Reset de página cuando cambian filtros / sort / limit
+  // cuando cambian filtros/sort/limit => volver a página 1
   useEffect(() => {
     setOffset(0);
   }, [qDebounced, activo, sort.orderBy, sort.orderDir, limit]);
 
-  useEffect(() => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
 
-    getProveedoresAvanzado({
-      q: qDebounced.trim() || undefined,
-      activo,
-      order_by: sort.orderBy,
-      order_dir: sort.orderDir,
-      limit,
-      offset,
-    })
-      .then((res) => {
-        const lista = Array.isArray(res.items) ? res.items : [];
-        setItems(lista);
-        setTotal(res.total ?? lista.length);
-      })
-      .catch((e) => setError(e?.message ?? "Error consultando API"))
-      .finally(() => setLoading(false));
+    try {
+      const res = await getProveedoresAvanzado({
+        q: qDebounced.trim() || undefined,
+        activo,
+        order_by: sort.orderBy,
+        order_dir: sort.orderDir,
+        limit,
+        offset,
+      });
+
+      setItems(res?.items ?? []);
+      setTotal(res?.total ?? 0);
+    } catch (e: any) {
+      const msg =
+        e?.response?.data?.detail ??
+        e?.message ??
+        "Error consultando API";
+      setError(msg);
+      setItems([]);
+      setTotal(0);
+    } finally {
+      setLoading(false);
+    }
   }, [qDebounced, activo, sort.orderBy, sort.orderDir, limit, offset]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   function prevPage() {
     setOffset((o) => Math.max(0, o - limit));
@@ -72,10 +85,6 @@ export default function ProveedoresList() {
 
   function nextPage() {
     setOffset((o) => o + limit);
-  }
-
-  function onChangeLimit(v: number) {
-    setLimit(v);
   }
 
   function toggleSort(col: ProveedorOrderBy) {
@@ -90,23 +99,73 @@ export default function ProveedoresList() {
     return sort.orderDir === "asc" ? " ▲" : " ▼";
   }
 
+  async function onDeactivate(id_proveedor: number, label?: string) {
+    const ok = window.confirm(
+      `¿Seguro que querés desactivar el proveedor${label ? ` "${label}"` : ""}?\n\nEsto NO lo elimina: solo lo marca como INACTIVO.`
+    );
+    if (!ok) return;
+
+    setLoading(true);
+    setError(null);
+    try {
+      await setProveedorActivo(id_proveedor, false);
+      await fetchData();
+    } catch (e: any) {
+      setError(e?.response?.data?.detail ?? e?.message ?? "Error desactivando proveedor");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function onReactivate(id_proveedor: number, label?: string) {
+    const ok = window.confirm(
+      `¿Seguro que querés reactivar el proveedor${label ? ` "${label}"` : ""}?`
+    );
+    if (!ok) return;
+
+    setLoading(true);
+    setError(null);
+    try {
+      await setProveedorActivo(id_proveedor, true);
+      await fetchData();
+    } catch (e: any) {
+      setError(e?.response?.data?.detail ?? e?.message ?? "Error reactivando proveedor");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+
   return (
     <div style={{ padding: 16 }}>
-      <h1>Proveedores</h1>
+      {/* Header */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 8,
+        }}
+      >
+        <h1>Proveedores</h1>
+        <Link to="/proveedores/nuevo">+ Nuevo</Link>
+      </div>
 
+      {/* Filtros */}
       <div
         style={{
           display: "flex",
           gap: 12,
           alignItems: "center",
           marginBottom: 12,
+          flexWrap: "wrap",
         }}
       >
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Buscar por nombre, email, teléfono..."
-          style={{ padding: 8, minWidth: 320 }}
+          placeholder="Buscar por nombre, email, teléfono, dirección..."
+          style={{ padding: 8, minWidth: 340 }}
         />
 
         <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -126,12 +185,14 @@ export default function ProveedoresList() {
         </label>
       </div>
 
+      {/* Paginación */}
       <div
         style={{
           display: "flex",
           gap: 12,
           alignItems: "center",
           marginBottom: 12,
+          flexWrap: "wrap",
         }}
       >
         <button onClick={prevPage} disabled={!canPrev}>
@@ -151,7 +212,7 @@ export default function ProveedoresList() {
             Por página:{" "}
             <select
               value={limit}
-              onChange={(e) => onChangeLimit(Number(e.target.value))}
+              onChange={(e) => setLimit(Number(e.target.value))}
             >
               {[5, 10, 20, 50].map((n) => (
                 <option key={n} value={n}>
@@ -166,6 +227,7 @@ export default function ProveedoresList() {
       {loading && <p>Cargando proveedores...</p>}
       {error && <p style={{ color: "crimson" }}>Error: {error}</p>}
 
+      {/* Tabla */}
       {!loading && !error && (
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
@@ -229,6 +291,16 @@ export default function ProveedoresList() {
               >
                 Activo{sortIndicator("activo")}
               </th>
+
+              <th
+                style={{
+                  textAlign: "center",
+                  borderBottom: "1px solid #444",
+                  padding: 8,
+                }}
+              >
+                Acciones
+              </th>
             </tr>
           </thead>
 
@@ -249,6 +321,45 @@ export default function ProveedoresList() {
                 </td>
                 <td style={{ padding: 8, borderBottom: "1px solid #333" }}>
                   {p.activo ? "Sí" : "No"}
+                </td>
+
+                <td
+                  style={{
+                    padding: 8,
+                    borderBottom: "1px solid #333",
+                    textAlign: "center",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  <Link
+                    to={`/proveedores/${p.id_proveedor}`}
+                    style={{ marginRight: 12 }}
+                  >
+                    Ver
+                  </Link>
+
+                  <Link
+                    to={`/proveedores/${p.id_proveedor}/editar`}
+                    style={{ marginRight: 12 }}
+                  >
+                    Editar
+                  </Link>
+
+                  {p.activo ? (
+                    <button onClick={() => onDeactivate(p.id_proveedor, p.nombre)} style={{
+                        background: "transparent",
+                        border: "1px solid #a33",
+                        padding: "4px 8px",
+                        cursor: "pointer",
+                      }}>Eliminar</button>
+                  ) : (
+                    <button onClick={() => onReactivate(p.id_proveedor, p.nombre)} style={{
+                        background: "transparent",
+                        border: "1px solid #3a3",
+                        padding: "4px 8px",
+                        cursor: "pointer",
+                      }}>Reactivar</button>
+                  )}
                 </td>
               </tr>
             ))}

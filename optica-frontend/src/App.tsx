@@ -12,11 +12,13 @@ import RecetasList from "./pages/Recetas/RecetasList";
 import RecetaDetalle from "./pages/Recetas/DetalleReceta";
 import ClienteForm from "./pages/Clientes/ClienteForm";
 import ClienteDetalle from "./pages/Clientes/ClienteDetalle";
+import ProveedorDetalle from "./pages/Proveedores/ProveedorDetalle";
+import ProveedorForm from "./pages/Proveedores/ProveedorForm";
+
 
 export default function App() {
   return (
     <Routes>
-      {/* Todo lo que quiera sidebar / layout va acá adentro */}
       <Route element={<AppLayout />}>
         <Route path="/" element={<Navigate to="/clientes" replace />} />
 
@@ -26,6 +28,9 @@ export default function App() {
         <Route path="/clientes/:id_cliente" element={<ClienteDetalle />} />
 
         <Route path="/proveedores" element={<ProveedoresList />} />
+        <Route path="/proveedores/nuevo" element={<ProveedorForm />} />
+        <Route path="/proveedores/:id_proveedor/editar" element={<ProveedorForm />} />
+        <Route path="/proveedores/:id_proveedor" element={<ProveedorDetalle />} />
         <Route path="/insumos" element={<InsumosList />} />
 
         <Route path="/compras-insumos" element={<ComprasList />} />
